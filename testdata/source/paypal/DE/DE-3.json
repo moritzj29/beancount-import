@@ -1,0 +1,117 @@
+{
+  "itemDetails": {
+    "itemList": [
+      {
+        "name": "dm Auftrag ---------removed----------",
+        "price": "108,71\u00a0EUR",
+        "isNegative": false,
+        "itemTotalPrice": "108,71\u00a0EUR"
+      }
+    ]
+  },
+  "fundingSource": {
+    "fundingSourceList": [
+      {
+        "type": "BANK_ACCOUNT",
+        "last4": "1111",
+        "institution": "Cortal Consors",
+        "amount": "108,71\u00a0EUR",
+        "currencyCode": "EUR"
+      }
+    ]
+  },
+  "shippingDetails": [
+    {
+      "address": {
+        "countryCode": "DE",
+        "line1": "---------removed----------",
+        "city": "---------removed----------",
+        "state": "",
+        "postalCode": "---------removed----------",
+        "countryName": "Deutschland",
+        "addresseeName": "---------removed----------"
+      }
+    }
+  ],
+  "fptiTag": "purchase",
+  "internal_id": "---------removed----------",
+  "counterparty": {
+    "detailsCounterpartyText": "dm-drogerie markt GmbH + Co. KG",
+    "name": "dm-drogerie markt GmbH + Co. KG",
+    "url": "https://www.dm.de",
+    "isBusiness": true
+  },
+  "counterpartyBizName": "dm-drogerie markt GmbH + Co. KG",
+  "invoiceId": "---------removed----------",
+  "availableBackupFI": {
+    "type": "CREDIT_CARD_TYPE_CREDIT",
+    "last4": "1111",
+    "institution": "VISA",
+    "nickname": ""
+  },
+  "p2pRedirect": {},
+  "links": {
+    "reportDispute": {
+      "target": "_blank",
+      "linkUrl": "/resolutioncenter/---------removed----------"
+    }
+  },
+  "paidWithHeader": "Bezahlt mit",
+  "savingsAccounts": {},
+  "fwcBrandCard": {
+    "productDisplayName": null,
+    "last4": null
+  },
+  "crossCurrencyRefundTooltip": "R\u00fcckzahlungen, die nach einem Tag ausgestellt werden, werden mit dem PayPal-Wechselkurs des R\u00fcckzahlungsdatums ausgezahlt. Der Betrag kann aufgrund von Wechselkursschwankungen variieren.",
+  "viewContext": "activity",
+  "displayStatus": "",
+  "transactionTypeEnum": "PAYMENT_SENT",
+  "transactionType": "Zahlung",
+  "txnTypeServiceKey": "PAYMENT",
+  "status": "COMPLETED",
+  "date": "10. Dezember 2020",
+  "creationTimeBucket": "MoreThan3Months",
+  "updateTimeBucket": "MoreThan3Months",
+  "isCredit": false,
+  "isBuyer": true,
+  "isSeller": false,
+  "buyerConfirmId": "4F6693670W199110R",
+  "transactionId": "4F6693670W199110R",
+  "amount": {
+    "grossAmount": "108,71\u00a0EUR",
+    "netAmount": "108,71\u00a0EUR",
+    "fullPageNetAmount": "108,71",
+    "feeAmount": "0,00\u00a0EUR",
+    "grossExceedsNet": false,
+    "isZeroFee": true,
+    "feeLabel": "Geb\u00fchr",
+    "rawAmounts": {
+      "gross": {
+        "value": "108.71",
+        "currencyCode": "EUR"
+      }
+    }
+  },
+  "isShipped": false,
+  "flags": {
+    "claimStatusMessage": null,
+    "isCheckoutTxn": true,
+    "showPurchaseDetails": true,
+    "hasActions": true
+  },
+  "printDetailsLink": {
+    "linkUrl": "/myaccount/transactions/print-details/---------removed----------",
+    "target": "_blank"
+  },
+  "partner": {},
+  "isCFPBEligible": false,
+  "isOffersInfoEligible": false,
+  "isCCCreditFailureWithOffersRecovery": false,
+  "merchantLogoUrl": "---------removed----------",
+  "badge": {},
+  "isNeutralAmount": false,
+  "isAmountTooBig": false,
+  "hideEmailShowChat": true,
+  "paymentDetailsReturnUrl": "/myaccount/transactions",
+  "isNewActivityUIEnabled": true
+}

@@ -1,0 +1,93 @@
+;; date: 2020-02-18
+;; info: {"filename": "<testdata>/DE-2.json", "type": "application/json"}
+
+; features: [
+;             {
+;               "amount": "-7.89 EUR",
+;               "date": "2020-02-18",
+;               "key_value_pairs": {
+;                 "paypal_counterparty": [
+;                   "eBay - Wieczorek Fachhandel"
+;                 ],
+;                 "paypal_item_name": [
+;                   "Kaufbetrag"
+;                 ]
+;               },
+;               "source_account": ""
+;             }
+;           ]
+2020-02-18 * "eBay - Wieczorek Fachhandel" "Rückzahlung" ^paypal.DE-2
+  associated_data0: "{\"description\": \"Paypal transaction\", \"link\": \"paypal.DE-2\", \"path\": \"<testdata>/DE-2.html\", \"type\": \"text/html\"}"
+  Expenses:FIXME:A  -7.89 EUR
+    paypal_counterparty: "eBay - Wieczorek Fachhandel"
+    paypal_item_name: "Kaufbetrag"
+  Assets:Paypal      7.89 EUR
+    date: 2020-02-18
+    paypal_transaction_id: "DE-2"
+
+;; date: 2020-03-25
+;; info: {"filename": "<testdata>/DE-1.json", "type": "application/json"}
+
+; features: [
+;             {
+;               "amount": "-166.00 EUR",
+;               "date": "2020-03-25",
+;               "key_value_pairs": {
+;                 "paypal_counterparty": [
+;                   "John Doe"
+;                 ]
+;               },
+;               "source_account": ""
+;             }
+;           ]
+2020-03-25 * "John Doe" "Geld erhalten - Mietwagen" ^paypal.DE-1
+  associated_data0: "{\"description\": \"Paypal transaction\", \"link\": \"paypal.DE-1\", \"path\": \"<testdata>/DE-1.html\", \"type\": \"text/html\"}"
+  Expenses:FIXME:A  -166.00 EUR
+    paypal_counterparty: "John Doe"
+    paypal_counterparty_email: "jd@doe.de"
+    paypal_note: "Mietwagen"
+  Assets:Paypal      166.00 EUR
+    date: 2020-03-25
+    paypal_transaction_id: "DE-1"
+
+;; date: 2020-12-10
+;; info: {"filename": "<testdata>/DE-3.json", "type": "application/json"}
+
+; features: [
+;             {
+;               "amount": "108.71 EUR",
+;               "date": "2020-12-10",
+;               "key_value_pairs": {
+;                 "paypal_counterparty": [
+;                   "dm-drogerie markt GmbH + Co. KG"
+;                 ],
+;                 "paypal_item_name": [
+;                   "dm Auftrag ---------removed----------"
+;                 ]
+;               },
+;               "source_account": ""
+;             },
+;             {
+;               "amount": "-108.71 EUR",
+;               "date": "2020-12-10",
+;               "key_value_pairs": {
+;                 "paypal_funding_source_institution": [
+;                   "Cortal Consors"
+;                 ],
+;                 "paypal_funding_source_last4": [
+;                   "1111"
+;                 ]
+;               },
+;               "source_account": ""
+;             }
+;           ]
+2020-12-10 * "dm-drogerie markt GmbH + Co. KG" "Zahlung" ^paypal.DE-3
+  associated_data0: "{\"description\": \"Paypal transaction\", \"link\": \"paypal.DE-3\", \"path\": \"<testdata>/DE-3.html\", \"type\": \"text/html\"}"
+  Expenses:FIXME:A   108.71 EUR
+    paypal_counterparty: "dm-drogerie markt GmbH + Co. KG"
+    paypal_counterparty_url: "https://www.dm.de"
+    paypal_invoice_id: "---------removed----------"
+    paypal_item_name: "dm Auftrag ---------removed----------"
+  Expenses:FIXME    -108.71 EUR
+    paypal_funding_source_institution: "Cortal Consors"
+    paypal_funding_source_last4: "1111"
