@@ -140,6 +140,7 @@ from ..journal_editor import JournalEditor
 from ..matching import FIXME_ACCOUNT, SimpleInventory
 from ..amount_parsing import parse_amount
 
+
 transaction_schema = {
     '#schema': 'http://json-schema.org/draft-07/schema#',
     'description': 'JSON schema for the transaction details.',
@@ -359,8 +360,9 @@ class Locale_EN:
         return dateutil.parser.parse(date_str).date()
 
     @staticmethod
-    def parse_amount(amount):
+    def parse_amount(amount) -> Amount:
         return parse_amount(amount)
+
 
 class Locale_DE:
     LOCALE = 'DE'
@@ -373,9 +375,9 @@ class Locale_DE:
             ('Okt', 'Oktober'), ('Nov', 'November'), ('Dez', 'Dezember')
             ]
     
-    @classmethod
-    def parse_date(cls, date_str) -> str:
-        return dateutil.parser.parse(date_str, parserinfo=cls._parserinfo(dayfirst=True)).date()
+    @staticmethod
+    def parse_date(date_str) -> str:
+        return dateutil.parser.parse(date_str, parserinfo=Locale_DE._parserinfo(dayfirst=True)).date()
 
     @staticmethod
     def _format_number_str(value: str) -> str:
@@ -384,9 +386,10 @@ class Locale_DE:
         decimal_sep = ','
         return value.replace(thousands_sep, '').replace(decimal_sep, '.')
 
-    @classmethod
-    def parse_amount(cls, amount):
-        return parse_amount(cls._format_number_str(amount))
+    @staticmethod
+    def parse_amount(amount) -> Amount:
+        return parse_amount(Locale_DE._format_number_str(amount))
+
 
 LOCALES = {x.LOCALE: x for x in [Locale_EN, Locale_DE]}
 
