@@ -1,0 +1,94 @@
+{
+  "fundingSource": {
+    "fundingSourceList": [
+      {
+        "type": "BALANCE",
+        "amount": "166,00\u00a0EUR",
+        "currencyCode": "EUR"
+      }
+    ]
+  },
+  "fptiTag": "moneyrec",
+  "internal_id": "---------removed----------",
+  "counterparty": {
+    "detailsCounterpartyText": "John Doe",
+    "name": "John Doe",
+    "email": "jd@doe.de",
+    "url": "",
+    "isBusiness": false,
+    "firstName": "John",
+    "lastName": "Doe"
+  },
+  "nameInitials": "JD",
+  "bubbleBackgroundColor": "#640487",
+  "notesInfo": {
+    "context": "from",
+    "note": "Mietwagen"
+  },
+  "p2pRedirect": {},
+  "links": {
+    "reportDispute": {
+      "target": "_blank",
+      "linkUrl": "/resolutioncenter/---------removed----------"
+    },
+    "sellerProtectionPolicy": {
+      "target": "_blank",
+      "linkUrl": "/webapps/mpp/ua/useragreement-full#11"
+    }
+  },
+  "savingsAccounts": {},
+  "fwcBrandCard": {
+    "productDisplayName": null,
+    "last4": null
+  },
+  "crossCurrencyRefundTooltip": "R\u00fcckzahlungen, die nach einem Tag ausgestellt werden, werden mit dem PayPal-Wechselkurs des R\u00fcckzahlungsdatums ausgezahlt. Der Betrag kann aufgrund von Wechselkursschwankungen variieren.",
+  "viewContext": "activity",
+  "displayStatus": "",
+  "transactionTypeEnum": "SEND_MONEY_RECEIVED",
+  "transactionType": "Geld erhalten",
+  "txnTypeServiceKey": "PAYMENT",
+  "status": "COMPLETED",
+  "date": "25. M\u00e4rz 2020",
+  "creationTimeBucket": "MoreThan3Months",
+  "updateTimeBucket": "MoreThan3Months",
+  "isCredit": true,
+  "isBuyer": false,
+  "isSeller": true,
+  "buyerConfirmId": "---------removed----------",
+  "transactionId": "---------removed----------",
+  "amount": {
+    "grossAmount": "166,00\u00a0EUR",
+    "netAmount": "166,00\u00a0EUR",
+    "fullPageNetAmount": "166,00",
+    "feeAmount": "0,00\u00a0EUR",
+    "grossExceedsNet": false,
+    "isZeroFee": true,
+    "feeLabel": "Geb\u00fchr",
+    "rawAmounts": {
+      "gross": {
+        "value": "166",
+        "currencyCode": "EUR"
+      }
+    }
+  },
+  "flags": {
+    "isP2PPersonal": true,
+    "showPaymentDetails": true,
+    "hasActions": true,
+    "isReportProblemWithoutNeedHelpExp": true
+  },
+  "printDetailsLink": {
+    "linkUrl": "/myaccount/transactions/print-details/---------removed----------",
+    "target": "_blank"
+  },
+  "partner": {},
+  "isCFPBEligible": false,
+  "isOffersInfoEligible": false,
+  "isCCCreditFailureWithOffersRecovery": false,
+  "badge": {},
+  "isNeutralAmount": false,
+  "isAmountTooBig": false,
+  "hideEmailShowChat": true,
+  "paymentDetailsReturnUrl": "/myaccount/transactions",
+  "isNewActivityUIEnabled": true
+}
