@@ -356,7 +356,7 @@ class Locale_EN:
     LOCALE = 'EN'
 
     @staticmethod
-    def parse_date(date_str) -> str:
+    def parse_date(date_str) -> datetime.date:
         return dateutil.parser.parse(date_str).date()
 
     @staticmethod
@@ -376,7 +376,7 @@ class Locale_DE:
             ]
     
     @staticmethod
-    def parse_date(date_str) -> str:
+    def parse_date(date_str) -> datetime.date:
         return dateutil.parser.parse(date_str, parserinfo=Locale_DE._parserinfo(dayfirst=True)).date()
 
     @staticmethod
@@ -394,13 +394,20 @@ class Locale_DE:
 LOCALES = {x.LOCALE: x for x in [Locale_EN, Locale_DE]}
 
 class PaypalSource(LinkBasedSource, Source):
-    def __init__(self, directory: str, assets_account: str, fee_account: str, prefix: str,
-                 locale: str='EN', **kwargs) -> None:
+    def __init__(self,
+                 directory: str,
+                 assets_account: str,
+                 fee_account: str,
+                 prefix: str,
+                 earliest_date: datetime.date = None,
+                 locale: str='EN',
+                 **kwargs) -> None:
         super().__init__(link_prefix=prefix + '.', **kwargs)
         self.directory = directory
         self.prefix = prefix
         self.assets_account = assets_account
         self.fee_account = fee_account
+        self.earliest_date = earliest_date
         self.locale = LOCALES[locale]
         self.example_transaction_key_extractors[prefix + '_counterparty'] = None
         self.example_posting_key_extractors[prefix + '_counterparty'] = None
@@ -680,6 +687,10 @@ class PaypalSource(LinkBasedSource, Source):
             import_result = self._make_import_result(
                     txn_id=txn_id, data=txn, json_path=path)
             if import_result is not None:
+                if self.earliest_date is not None and import_result.date < self.earliest_date:
+                    self.log_status("Skipping transaction with date [%s] before [%s]"
+                                    % ( str(import_result.date), self.earliest_date ) )
+                    continue
                 results.add_pending_entry(import_result)
         results.add_account(self.assets_account)
 
