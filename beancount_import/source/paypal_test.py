@@ -33,7 +33,7 @@ def test_source(name: str):
 testdata_dir = os.path.realpath(
     os.path.join(
         os.path.dirname(__file__), '..', '..', 'testdata', 'source',
-        'paypal','DE'))
+        'paypal','de_DE'))
 
 examples = [
     'test_basic',
@@ -51,6 +51,6 @@ def test_source(name: str):
             'assets_account': 'Assets:Paypal',
             'fee_account': 'Expenses:Financial:Paypal:Fees',
             'prefix': 'paypal',
-            'locale': 'DE'
+            'locale': 'de_DE'
         },
         replacements=[(testdata_dir, '<testdata>')])

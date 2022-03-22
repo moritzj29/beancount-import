@@ -27,7 +27,7 @@ expression like the following to specify the Paypal source:
          assets_account='Assets:Paypal',
          fee_account='Expenses:Financial:Paypal:Fees',
          prefix='paypal',
-         locale='EN' # optional, default: 'EN'
+         locale='en_EN' # optional, default: 'en_EN'
     )
 
 where `journal_dir` refers to the financial/ directory.
@@ -43,7 +43,7 @@ your Paypal balance should be specified as the `assets_account`.  The
 
 The `locale` sets some country/language specific settings, e.g. correct
 parsing of the date string and the decimal/thousand separators for numbers.
-Currently, `EN` and `DE` are available. 
+Currently, `en_EN` and `de_DE` are available. 
 
 Imported transaction format
 ===========================
@@ -139,7 +139,6 @@ from ..posting_date import POSTING_DATE_KEY
 from ..journal_editor import JournalEditor
 from ..matching import FIXME_ACCOUNT, SimpleInventory
 from ..amount_parsing import parse_amount
-
 
 transaction_schema = {
     '#schema': 'http://json-schema.org/draft-07/schema#',
@@ -352,8 +351,8 @@ transaction_schema = {
     ],
 }
 
-class Locale_EN:
-    LOCALE = 'EN'
+class Locale_en_EN:
+    LOCALE = 'en_EN'
 
     @staticmethod
     def parse_date(date_str) -> datetime.date:
@@ -364,8 +363,8 @@ class Locale_EN:
         return parse_amount(amount)
 
 
-class Locale_DE:
-    LOCALE = 'DE'
+class Locale_de_DE:
+    LOCALE = 'de_DE'
 
     class _parserinfo(dateutil.parser.parserinfo):
         MONTHS=[
@@ -377,7 +376,7 @@ class Locale_DE:
     
     @staticmethod
     def parse_date(date_str) -> datetime.date:
-        return dateutil.parser.parse(date_str, parserinfo=Locale_DE._parserinfo(dayfirst=True)).date()
+        return dateutil.parser.parse(date_str, parserinfo=Locale_de_DE._parserinfo(dayfirst=True)).date()
 
     @staticmethod
     def _format_number_str(value: str) -> str:
@@ -388,10 +387,10 @@ class Locale_DE:
 
     @staticmethod
     def parse_amount(amount) -> Amount:
-        return parse_amount(Locale_DE._format_number_str(amount))
+        return parse_amount(Locale_de_DE._format_number_str(amount))
 
 
-LOCALES = {x.LOCALE: x for x in [Locale_EN, Locale_DE]}
+LOCALES = {x.LOCALE: x for x in [Locale_en_EN, Locale_de_DE]}
 
 class PaypalSource(LinkBasedSource, Source):
     def __init__(self,
@@ -400,7 +399,7 @@ class PaypalSource(LinkBasedSource, Source):
                  fee_account: str,
                  prefix: str,
                  earliest_date: datetime.date = None,
-                 locale: str='EN',
+                 locale: str='en_EN',
                  **kwargs) -> None:
         super().__init__(link_prefix=prefix + '.', **kwargs)
         self.directory = directory
