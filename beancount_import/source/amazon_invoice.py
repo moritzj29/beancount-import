@@ -8,6 +8,7 @@ import os
 import functools
 import datetime
 import logging
+from abc import ABC, abstractmethod
 
 import bs4
 import dateutil.parser
@@ -20,8 +21,7 @@ from ..amount_parsing import parse_amount, parse_number
 logger = logging.getLogger('amazon_invoice')
 
 
-@dataclasses.dataclass
-class Locale_Data():
+class Locale_Data(ABC):
     LOCALE: str
     tax_included_in_price: bool
     payee: str
@@ -70,85 +70,92 @@ class Locale_Data():
     digital_order_id: str
     digital_payment_information: str
 
+    @staticmethod
+    @abstractmethod
+    def parse_amount(amount, assumed_currency=None) -> Amount:
+        raise NotImplementedError
 
-class Locale_en_EN(Locale_Data):
+    @staticmethod
+    @abstractmethod
+    def parse_date(date_str) -> datetime.date:
+        raise NotImplementedError
+
+
+class Locale_en_US(Locale_Data):
     """Language and region specific settings for parsing amazon.com invoices
     """
-    def __init__(self) -> None:
-        super().__init__(
-            LOCALE='en_EN',
-            tax_included_in_price=False,
-            payee='Amazon.com',
-            
-            # common fields regular and digital orders
-            items_ordered='Items Ordered', # shipment + digital
-            price='Price', # shipment + digital
-            currency='USD', # shipment only
-            items_subtotal=r'Item\(s\) Subtotal:', # shipment +digital
-            total_before_tax='Total Before Tax:', # shipment + digital
-            pretax_adjustment_fields_pattern=('(?:' + '|'.join([
-                'Shipping & Handling', # Verpackung & Versand:
-                'Free Shipping',
-                'Free delivery',
-                'Pantry delivery',
-                'Promotion(?:s| Applied)', # Gutschein eingelöst:
-                'Lightning Deal',
-                'Your Coupon Savings', 
-                '[0-9]+% off savings',
-                'Subscribe & Save',
-                '[0-9]+ Audible Credit Applied',
-                '.*[0-9]+% Off.*',
-                'Courtesy Credit',
-                'Extra Savings',
-                '(?:.*) Discount',
-                'Gift[ -]Wrap',
-            ]) + ') *:'),
-            posttax_adjustment_fields_pattern=r'Gift Card Amount:|Rewards Points:|Tip [(]optional[)]:|Recycle Fee \$X',
+    LOCALE='en_US'
+    tax_included_in_price=False
+    payee='Amazon.com'
+    
+    # common fields regular and digital orders
+    items_ordered='Items Ordered' # shipment + digital
+    price='Price' # shipment + digital
+    currency='USD' # shipment only
+    items_subtotal=r'Item\(s\) Subtotal:' # shipment +digital
+    total_before_tax='Total Before Tax:' # shipment + digital
+    pretax_adjustment_fields_pattern=('(?:' + '|'.join([
+        'Shipping & Handling', # Verpackung & Versand:
+        'Free Shipping',
+        'Free delivery',
+        'Pantry delivery',
+        'Promotion(?:s| Applied)', # Gutschein eingelöst:
+        'Lightning Deal',
+        'Your Coupon Savings', 
+        '[0-9]+% off savings',
+        'Subscribe & Save',
+        '[0-9]+ Audible Credit Applied',
+        '.*[0-9]+% Off.*',
+        'Courtesy Credit',
+        'Extra Savings',
+        '(?:.*) Discount',
+        'Gift[ -]Wrap',
+    ]) + ') *:')
+    posttax_adjustment_fields_pattern=r'Gift Card Amount:|Rewards Points:|Tip [(]optional[)]:|Recycle Fee \$X'
 
-            # Payment Table & Credit Card Transactions
-            grand_total=r'\n\s*Grand Total:\s+(.*)\n',
-            credit_card_transactions='Credit Card transactions',
-            credit_card_last_digits=r'^([^:]+) ending in ([0-9]+):\s+([^:]+):$',
-            payment_type=[
-                # only first matching regex is used!
-                r'\n\s*([^\s|][^|\n]*[^|\s])\s+\|\s+Last (?:4 )?digits:\s+([0-9]{4})\n',
-                r'\n\s*(.+)\s+ending in\s+([0-9]{4})\n'
-                ],
-            payment_information='^Payment information$',
+    # Payment Table & Credit Card Transactions
+    grand_total=r'\n\s*Grand Total:\s+(.*)\n'
+    credit_card_transactions='Credit Card transactions'
+    credit_card_last_digits=r'^([^:]+) ending in ([0-9]+):\s+([^:]+):$'
+    payment_type=[
+        # only first matching regex is used!
+        r'\n\s*([^\s|][^|\n]*[^|\s])\s+\|\s+Last (?:4 )?digits:\s+([0-9]{4})\n',
+        r'\n\s*(.+)\s+ending in\s+([0-9]{4})\n'
+        ]
+    payment_information='^Payment information$'
 
-            # regular orders only
-            shipment_shipped_pattern='^Shipped on ([^\\n]+)$',
-            shipment_nonshipped_headers=[
-                'Service completed',
-                'Preparing for Shipment',
-                'Not Yet Shipped',
-                'Shipping now'
-                ],
-            shipment_quantity=r'^\s*(?:(?P<quantity>[0-9]+)|(?P<weight1>[0-9.]+\s+(?:lb|kg))|(?:(?P<quantityIgnore>[0-9.]+) [(](?P<weight2>[^)]+)[)]))\s+of:',
-            shipment_of='of:',
-            shipment_sales_tax='Sales Tax:',
-            shipment_total='Total for This Shipment:',
-            shipment_seller_profile=' (seller profile)',
-            shipment_sold_by=r'(?P<description>.*)\n\s*(?:Sold|Provided) by:? (?P<sold_by>[^\n]+)',
-            shipment_condition=r'\n.*\n\s*Condition: (?P<condition>[^\n]+)',
-            regular_total_order='Grand Total:',
-            regular_estimated_tax = 'Estimated tax to be collected:',
-            regular_order_placed=r'(?:Subscribe and Save )?Order Placed:\s+([^\s]+ \d+, \d{4})',
-            regular_order_id=r'.*Order ([0-9\-]+)',
-            gift_card='Gift Cards', # not confirmed yet!
-            gift_card_to=r'^(?P<type>Gift Card)[\w\s-]*:\s*(?P<sent_to>[\w@._-]*)$', # guess, not confirmed yet!
-            gift_card_amazon_account=r'^[\w\s-]*(?P<type>Amazon-Account)[\w\s-]*(?P<sent_to>charged up)[\w\s-]*$', # guess, not confirmed yet!
+    # regular orders only
+    shipment_shipped_pattern='^Shipped on ([^\\n]+)$'
+    shipment_nonshipped_headers=[
+        'Service completed',
+        'Preparing for Shipment',
+        'Not Yet Shipped',
+        'Shipping now'
+        ]
+    shipment_quantity=r'^\s*(?:(?P<quantity>[0-9]+)|(?P<weight1>[0-9.]+\s+(?:lb|kg))|(?:(?P<quantityIgnore>[0-9.]+) [(](?P<weight2>[^)]+)[)]))\s+of:'
+    shipment_of='of:'
+    shipment_sales_tax='Sales Tax:'
+    shipment_total='Total for This Shipment:'
+    shipment_seller_profile=' (seller profile)'
+    shipment_sold_by=r'(?P<description>.*)\n\s*(?:Sold|Provided) by:? (?P<sold_by>[^\n]+)'
+    shipment_condition=r'\n.*\n\s*Condition: (?P<condition>[^\n]+)'
+    regular_total_order='Grand Total:'
+    regular_estimated_tax = 'Estimated tax to be collected:'
+    regular_order_placed=r'(?:Subscribe and Save )?Order Placed:\s+([^\s]+ \d+, \d{4})'
+    regular_order_id=r'.*Order ([0-9\-]+)'
+    gift_card='Gift Cards' # not confirmed yet!
+    gift_card_to=r'^(?P<type>Gift Card)[\w\s-]*:\s*(?P<sent_to>[\w@._-]*)$' # guess, not confirmed yet!
+    gift_card_amazon_account=r'^[\w\s-]*(?P<type>Amazon-Account)[\w\s-]*(?P<sent_to>charged up)[\w\s-]*$' # guess, not confirmed yet!
 
-            # digital orders only
-            digital_order='Digital Order: (.*)',
-            digital_order_cancelled='Order Canceled',
-            digital_by='By',
-            digital_sold_by=r'Sold\s+By',
-            digital_tax_collected='Tax Collected:',
-            digital_total_order='Total for this Order:',
-            digital_order_id='^Amazon.com\\s+order number:\\s+(D[0-9-]+)$',
-            digital_payment_information='Payment Information'
-        )
+    # digital orders only
+    digital_order='Digital Order: (.*)'
+    digital_order_cancelled='Order Canceled'
+    digital_by='By'
+    digital_sold_by=r'Sold\s+By'
+    digital_tax_collected='Tax Collected:'
+    digital_total_order='Total for this Order:'
+    digital_order_id='^Amazon.com\\s+order number:\\s+(D[0-9-]+)$'
+    digital_payment_information='Payment Information'
 
     @staticmethod
     def parse_amount(amount, assumed_currency=None) -> Amount:
@@ -162,77 +169,74 @@ class Locale_en_EN(Locale_Data):
 class Locale_de_DE(Locale_Data):
     """Language and region specific settings for parsing amazon.de invoices
     """
-    def __init__(self):
-        super().__init__(
-            LOCALE='de_DE',
-            tax_included_in_price=True,  # no separate tax transactions
-            payee='Amazon.de',
+    LOCALE='de_DE'
+    tax_included_in_price=True  # no separate tax transactions
+    payee='Amazon.de'
 
-            # common fields regular and digital orders
-            items_ordered='Bestellte Artikel|Erhalten|Versendet|Amazon-Konto erfolgreich aufgeladen', # Erhalten|Versendet for gift cards
-            price='Preis|Betrag',
-            currency='EUR',
-            items_subtotal='Zwischensumme:',
-            total_before_tax='Summe ohne MwSt.:',
-            # most of translations still missing ...
-            pretax_adjustment_fields_pattern=('(?:' + '|'.join([
-                'Verpackung & Versand',
-                # 'Free Shipping', 'Free delivery', 'Pantry delivery',
-                # 'Promotion(?:s| Applied)', 'Lightning Deal',
-                # 'Your Coupon Savings', '[0-9]+% off savings',
-                # 'Subscribe & Save', '[0-9]+ Audible Credit Applied',
-                # '.*[0-9]+% Off.*', 'Courtesy Credit',
-                # 'Extra Savings', '(?:.*) Discount', 'Gift[ -]Wrap',
-            ]) + ') *:'),
-            # most adjustments in DE are posttax:
-            posttax_adjustment_fields_pattern='Gutschein eingelöst:|Geschenkgutschein\(e\):',
-            
-            # Payment Table & Credit Card Transactions
-            grand_total=r'\n\s*(?:Gesamtsumme|Endsumme):\s+(.*)\n', # regular: Gesamtsumme, digital: Endsumme
-            credit_card_transactions='Kreditkarten-Transaktionen',
-            credit_card_last_digits=r'^([^:]+) mit den Endziffern ([0-9]+):\s+([^:]+):$',
-            payment_type=[
-                # only first matching regex is used!
-                r'\n\s*([^\s|][^|\n]*[^|\s])\s+\|\s+Die letzten (?:4 )?Ziffern:\s*([0-9]{3,4})', # 3 digits for Bankeinzug
-                r'\n\s*(.+)\s+mit den Endziffern\s+([0-9]{4})\n'
-                ],
-            payment_information='^Zahlungsdaten$',
+    # common fields regular and digital orders
+    items_ordered='Bestellte Artikel|Erhalten|Versendet|Amazon-Konto erfolgreich aufgeladen' # Erhalten|Versendet for gift cards
+    price='Preis|Betrag'
+    currency='EUR'
+    items_subtotal='Zwischensumme:'
+    total_before_tax='Summe ohne MwSt.:'
+    # most of translations still missing ...
+    pretax_adjustment_fields_pattern=('(?:' + '|'.join([
+        'Verpackung & Versand',
+        # 'Free Shipping', 'Free delivery', 'Pantry delivery',
+        # 'Promotion(?:s| Applied)', 'Lightning Deal',
+        # 'Your Coupon Savings', '[0-9]+% off savings',
+        # 'Subscribe & Save', '[0-9]+ Audible Credit Applied',
+        # '.*[0-9]+% Off.*', 'Courtesy Credit',
+        # 'Extra Savings', '(?:.*) Discount', 'Gift[ -]Wrap',
+    ]) + ') *:')
+    # most adjustments in DE are posttax:
+    posttax_adjustment_fields_pattern='Gutschein eingelöst:|Geschenkgutschein\(e\):'
+    
+    # Payment Table & Credit Card Transactions
+    grand_total=r'\n\s*(?:Gesamtsumme|Endsumme):\s+(.*)\n' # regular: Gesamtsumme, digital: Endsumme
+    credit_card_transactions='Kreditkarten-Transaktionen'
+    credit_card_last_digits=r'^([^:]+) mit den Endziffern ([0-9]+):\s+([^:]+):$'
+    payment_type=[
+        # only first matching regex is used!
+        r'\n\s*([^\s|][^|\n]*[^|\s])\s+\|\s+Die letzten (?:4 )?Ziffern:\s*([0-9]{3,4})', # 3 digits for Bankeinzug
+        r'\n\s*(.+)\s+mit den Endziffern\s+([0-9]{4})\n'
+        ]
+    payment_information='^Zahlungsdaten$'
 
-            # regular orders only
-            shipment_shipped_pattern='^versandt am ([^\\n]+)$',
-            shipment_nonshipped_headers={
-                'Versand wird vorbereitet',
-                'Versand in Kürze',
-                # Translations missing
-                'Service completed',
-                'Not Yet Shipped',
-                'Shipping now'
-            },
-            shipment_quantity=r'^\s*(?:(?P<quantity>[0-9]+)|(?P<weight1>[0-9.]+\s+(?:lb|kg))|(?:(?P<quantityIgnore>[0-9.]+) [(](?P<weight2>[^)]+)[)]))\s+Exemplar\(e\)\svon:',
-            shipment_of='Exemplar(e) von:',
-            shipment_sales_tax='Anzurechnende MwSt.:', # not sure (only old invoices)
-            shipment_total='Gesamtsumme:',
-            shipment_seller_profile=' (Mitgliedsprofil)',
-            shipment_sold_by=r'(?P<description>.*)\n\s*(?:Verkauf) durch:? (?P<sold_by>[^\n]+)',
-            shipment_condition=r'\n.*\n\s*Zustand: (?P<condition>[^\n]+)',
-            regular_total_order='Gesamtsumme:',
-            regular_estimated_tax='Anzurechnende MwSt.:',
-            regular_order_placed=r'(?:Getätigte Spar-Abo-Bestellung|Bestellung aufgegeben am):\s+(\d+\. [^\s]+ \d{4})',
-            regular_order_id=r'.*Bestellung ([0-9\-]+)',
-            gift_card='Geschenkgutscheine',
-            gift_card_to=r'^(?P<type>Geschenkgutschein)[\w\s-]*:\s*(?P<sent_to>[\w@._-]*)$',
-            gift_card_amazon_account=r'^[\w\s-]*(?P<type>Amazon-Konto)[\w\s-]*(?P<sent_to>aufgeladen)[\w\s-]*$',
+    # regular orders only
+    shipment_shipped_pattern='^versandt am ([^\\n]+)$'
+    shipment_nonshipped_headers=[
+        'Versand wird vorbereitet',
+        'Versand in Kürze',
+        # Translations missing
+        'Service completed',
+        'Not Yet Shipped',
+        'Shipping now'
+    ]
+    shipment_quantity=r'^\s*(?:(?P<quantity>[0-9]+)|(?P<weight1>[0-9.]+\s+(?:lb|kg))|(?:(?P<quantityIgnore>[0-9.]+) [(](?P<weight2>[^)]+)[)]))\s+Exemplar\(e\)\svon:'
+    shipment_of='Exemplar(e) von:'
+    shipment_sales_tax='Anzurechnende MwSt.:' # not sure (only old invoices)
+    shipment_total='Gesamtsumme:'
+    shipment_seller_profile=' (Mitgliedsprofil)'
+    shipment_sold_by=r'(?P<description>.*)\n\s*(?:Verkauf) durch:? (?P<sold_by>[^\n]+)'
+    shipment_condition=r'\n.*\n\s*Zustand: (?P<condition>[^\n]+)'
+    regular_total_order='Gesamtsumme:'
+    regular_estimated_tax='Anzurechnende MwSt.:'
+    regular_order_placed=r'(?:Getätigte Spar-Abo-Bestellung|Bestellung aufgegeben am):\s+(\d+\. [^\s]+ \d{4})'
+    regular_order_id=r'.*Bestellung ([0-9\-]+)'
+    gift_card='Geschenkgutscheine'
+    gift_card_to=r'^(?P<type>Geschenkgutschein)[\w\s-]*:\s*(?P<sent_to>[\w@._-]*)$'
+    gift_card_amazon_account=r'^[\w\s-]*(?P<type>Amazon-Konto)[\w\s-]*(?P<sent_to>aufgeladen)[\w\s-]*$'
 
-            # digital orders only
-            digital_order_cancelled='Order Canceled',
-            digital_order='Digitale Bestellung: (.*)',
-            digital_by='Von',
-            digital_sold_by=r'Verkauft von',
-            digital_tax_collected='MwSt:',
-            digital_total_order='Endsumme:',
-            digital_order_id='^Amazon.de\\s+Bestellnummer:\\s+(D[0-9-]+)$',
-            digital_payment_information='Zahlungsinformation'
-        )
+    # digital orders only
+    digital_order_cancelled='Order Canceled'
+    digital_order='Digitale Bestellung: (.*)'
+    digital_by='Von'
+    digital_sold_by=r'Verkauft von'
+    digital_tax_collected='MwSt:'
+    digital_total_order='Endsumme:'
+    digital_order_id='^Amazon.de\\s+Bestellnummer:\\s+(D[0-9-]+)$'
+    digital_payment_information='Zahlungsinformation'
 
     @staticmethod
     def _format_number_str(value: str) -> str:
@@ -263,8 +267,7 @@ class Locale_de_DE(Locale_Data):
         return dateutil.parser.parse(date_str, parserinfo=Locale_de_DE._parserinfo(dayfirst=True)).date()
 
 
-LOCALES_type = Dict[str, Any]
-LOCALES: LOCALES_type = {'en_EN': Locale_en_EN, 'de_DE': Locale_de_DE}
+LOCALES = {x.LOCALE: x for x in [Locale_en_US, Locale_de_DE]}
 
 Errors = List[str]
 Adjustment = NamedTuple('Adjustment', [
@@ -363,7 +366,7 @@ def get_field_in_table(table, pattern, allow_multiple=False,
     return results
 
 
-def get_adjustments_in_table(table, pattern, assumed_currency=None, locale=Locale_en_EN()):
+def get_adjustments_in_table(table, pattern, assumed_currency=None, locale=Locale_en_US()):
     adjustments = []
     for label, amount_str in get_field_in_table(
             table, pattern, allow_multiple=True, return_label=True):
@@ -383,7 +386,7 @@ def reduce_adjustments(adjustments: List[Adjustment]) -> List[Adjustment]:
     ]
     
 
-def parse_shipments(soup, locale=Locale_en_EN()) -> List[Shipment]:
+def parse_shipments(soup, locale=Locale_en_US()) -> List[Shipment]:
     """
     Parses Shipment Table Part of HTML document (1st Table)
     """
@@ -501,7 +504,7 @@ def parse_shipments(soup, locale=Locale_en_EN()) -> List[Shipment]:
 
     return shipments
 
-def parse_gift_cards(soup, locale=Locale_en_EN()) -> List[Shipment]:
+def parse_gift_cards(soup, locale=Locale_en_US()) -> List[Shipment]:
     """
     Parses Gift Card Table Part of HTML document (1st Table)
     """
@@ -594,7 +597,7 @@ def parse_gift_cards(soup, locale=Locale_en_EN()) -> List[Shipment]:
 
 def parse_shipment_payments(
     shipment_table, items, errors,
-    shipped_date=None, locale=Locale_en_EN()):
+    shipped_date=None, locale=Locale_en_US()):
     """ Parse payment information of single shipments and gift card orders.
     """
     logger.debug('parsing shipment amounts...')
@@ -656,7 +659,7 @@ def parse_shipment_payments(
 def parse_credit_card_transactions_from_payments_table(
         payment_table,
         order_date: datetime.date,
-        locale=Locale_en_EN()) -> List[CreditCardTransaction]:
+        locale=Locale_en_US()) -> List[CreditCardTransaction]:
     """ Parse payment information from payments table.
     Only type and last digits are given, no amount (assuming grand total).
     Other payment methods than credit card are possible:
@@ -686,7 +689,7 @@ def parse_credit_card_transactions_from_payments_table(
     return credit_card_transactions
 
 
-def parse_credit_card_transactions(soup, locale=Locale_en_EN()) -> List[CreditCardTransaction]:
+def parse_credit_card_transactions(soup, locale=Locale_en_US()) -> List[CreditCardTransaction]:
     """ Parse Credit Card Transactions from bottom sub-table of payments table.
     Transactions are listed with type, 4 digits, transaction date and amount.
     """
@@ -719,7 +722,7 @@ def parse_credit_card_transactions(soup, locale=Locale_en_EN()) -> List[CreditCa
     return transactions
 
 
-def parse_invoice(path: str, locale=Locale_en_EN()) -> Optional[Order]:
+def parse_invoice(path: str, locale=Locale_en_US()) -> Optional[Order]:
     """ 1st method to call, distinguish between regular and digital invoice.
     """
     if os.path.basename(path).startswith('D'):
@@ -729,7 +732,7 @@ def parse_invoice(path: str, locale=Locale_en_EN()) -> Optional[Order]:
     return parse_regular_order_invoice(path, locale=locale)
 
 
-def parse_regular_order_invoice(path: str, locale=Locale_en_EN()) -> Order:
+def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
     errors = []
     with open(path, 'rb') as f:
         soup = bs4.BeautifulSoup(f.read(), 'lxml')
@@ -901,7 +904,7 @@ def get_text_lines(parent_node):
     return text_lines
 
 
-def parse_digital_order_invoice(path: str, locale=Locale_en_EN()) -> Optional[Order]:
+def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Order]:
     errors = []
     with open(path, 'rb') as f:
         soup = bs4.BeautifulSoup(f.read(), 'lxml')
@@ -1108,11 +1111,11 @@ def main():
         action='store_true',
         help='Output in JSON format.')
     ap.add_argument(
-        '--locale', default='en_EN', help='Local Amazon settings, defaults to EN')
+        '--locale', default='en_US', help='Local Amazon settings, defaults to en_US')
     ap.add_argument('paths', nargs='*')
 
     args = ap.parse_args()
-    locale = LOCALES[args.locale]()
+    locale = LOCALES[args.locale]
     results = []
     for path in args.paths:
         try:
