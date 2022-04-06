@@ -27,7 +27,7 @@ main(...)
     |        + parse_credit_card_transactions_from_payments_table(...)
     |        +-> returns Order(..., shipments, ...)
     |
-    +-> returns List[Order]
+    +-> returns Order
 """
 from typing import NamedTuple, Optional, List, Union, Iterable, Dict, Sequence, cast
 from abc import ABC, abstractmethod
@@ -53,11 +53,11 @@ class Locale_Data(ABC):
     LOCALE: str
     tax_included_in_price: bool
     payee: str
+    currency: str  # only used for assumed prices
 
     # common fields regular and digital orders
     items_ordered: str
     price: str
-    currency: str
     items_subtotal: str
     total_before_tax: str
     pretax_adjustment_fields_pattern: str
@@ -84,9 +84,9 @@ class Locale_Data(ABC):
     regular_estimated_tax: str
     regular_order_placed: str
     regular_order_id: str
-    gift_card: str
-    gift_card_to: str
-    gift_card_amazon_account: str
+    gift_card: Optional[str]
+    gift_card_to: Optional[str]
+    gift_card_amazon_account: Optional[str]
 
     # digital orders only
     digital_order: str
@@ -115,19 +115,19 @@ class Locale_en_US(Locale_Data):
     LOCALE='en_US'
     tax_included_in_price=False
     payee='Amazon.com'
+    currency='USD'  # only used for assumed prices
     
     # common fields regular and digital orders
-    items_ordered='Items Ordered' # shipment + digital
-    price='Price' # shipment + digital
-    currency='USD' # shipment only
-    items_subtotal=r'Item\(s\) Subtotal:' # shipment +digital
-    total_before_tax='Total Before Tax:' # shipment + digital
+    items_ordered='Items Ordered'
+    price='Price'
+    items_subtotal=r'Item\(s\) Subtotal:'
+    total_before_tax='Total Before Tax:'
     pretax_adjustment_fields_pattern=('(?:' + '|'.join([
-        'Shipping & Handling', # Verpackung & Versand:
+        'Shipping & Handling',
         'Free Shipping',
         'Free delivery',
         'Pantry delivery',
-        'Promotion(?:s| Applied)', # Gutschein eingelöst:
+        'Promotion(?:s| Applied)',
         'Lightning Deal',
         'Your Coupon Savings', 
         '[0-9]+% off savings',
@@ -159,6 +159,8 @@ class Locale_en_US(Locale_Data):
         'Preparing for Shipment',
         'Not Yet Shipped',
         'Shipping now'
+        # unknown shipment statuses will be ignored
+        # transaction total will not match
         ]
     shipment_quantity=r'^\s*(?:(?P<quantity>[0-9]+)|(?P<weight1>[0-9.]+\s+(?:lb|kg))|(?:(?P<quantityIgnore>[0-9.]+) [(](?P<weight2>[^)]+)[)]))\s+of:'
     shipment_of='of:'
@@ -171,9 +173,6 @@ class Locale_en_US(Locale_Data):
     regular_estimated_tax = 'Estimated tax to be collected:'
     regular_order_placed=r'(?:Subscribe and Save )?Order Placed:\s+([^\s]+ \d+, \d{4})'
     regular_order_id=r'.*Order ([0-9\-]+)'
-    gift_card='Gift Cards' # not confirmed yet!
-    gift_card_to=r'^(?P<type>Gift Card)[\w\s-]*:\s*(?P<sent_to>[\w@._-]*)$' # guess, not confirmed yet!
-    gift_card_amazon_account=r'^[\w\s-]*(?P<type>Amazon-Account)[\w\s-]*(?P<sent_to>charged up)[\w\s-]*$' # guess, not confirmed yet!
 
     # digital orders only
     digital_order='Digital Order: (.*)'
@@ -200,11 +199,11 @@ class Locale_de_DE(Locale_Data):
     LOCALE='de_DE'
     tax_included_in_price=True  # no separate tax transactions
     payee='Amazon.de'
+    currency='EUR'  # only used for assumed prices
 
     # common fields regular and digital orders
     items_ordered='Bestellte Artikel|Erhalten|Versendet|Amazon-Konto erfolgreich aufgeladen' # Erhalten|Versendet for gift cards
     price='Preis|Betrag'
-    currency='EUR'
     items_subtotal='Zwischensumme:'
     total_before_tax='Summe ohne MwSt.:'
     # most of translations still missing ...
@@ -236,10 +235,9 @@ class Locale_de_DE(Locale_Data):
     shipment_nonshipped_headers=[
         'Versand wird vorbereitet',
         'Versand in Kürze',
-        # Translations missing
-        'Service completed',
-        'Not Yet Shipped',
-        'Shipping now'
+        # additional cases missing?
+        # unknown shipment statuses will be ignored
+        # transaction total will not match
     ]
     shipment_quantity=r'^\s*(?:(?P<quantity>[0-9]+)|(?P<weight1>[0-9.]+\s+(?:lb|kg))|(?:(?P<quantityIgnore>[0-9.]+) [(](?P<weight2>[^)]+)[)]))\s+Exemplar\(e\)\svon:'
     shipment_of='Exemplar(e) von:'
@@ -322,10 +320,10 @@ Shipment = NamedTuple('Shipment', [
     ('shipped_date', Optional[datetime.date]),
     ('items', Sequence[Union[Item, DigitalItem]]),
     ('items_subtotal', Amount),
-    ('pretax_adjustments', Sequence[Adjustment]),
+    ('pretax_adjustments', List[Adjustment]),
     ('total_before_tax', Amount),
     ('posttax_adjustments', Sequence[Adjustment]),
-    ('tax', Amount),
+    ('tax', List[Adjustment]),
     ('total', Amount),
     ('errors', Errors),
 ])
@@ -394,7 +392,10 @@ def get_field_in_table(table, pattern, allow_multiple=False,
     return results
 
 
-def get_adjustments_in_table(table, pattern, assumed_currency=None, locale=Locale_en_US()):
+def get_adjustments_in_table(
+    table, pattern, assumed_currency=None, locale=Locale_en_US) -> List[Adjustment]:
+    """ Parse price adjustments in shipping or payment tables. Returns list of adjustments.
+    """
     adjustments = []
     for label, amount_str in get_field_in_table(
             table, pattern, allow_multiple=True, return_label=True):
@@ -404,17 +405,35 @@ def get_adjustments_in_table(table, pattern, assumed_currency=None, locale=Local
     return adjustments
 
 
-def reduce_adjustments(adjustments: List[Adjustment]) -> List[Adjustment]:
+def reduce_adjustments(adjustments: Sequence[Adjustment]) -> Sequence[Adjustment]:
+    """ Takes list of adjustments and reduces duplicates by summing up the amounts.
+    """
+    # create dict like {adjustment: [amount1, amount2, ...]}
     all_adjustments = collections.OrderedDict()  # type: Dict[str, List[Amount]]
     for adjustment in adjustments:
         all_adjustments.setdefault(adjustment.description,
                                    []).append(adjustment.amount)
+    # sum over amounts and convert back to list of Adjustment
     return [
         Adjustment(k, reduce_amounts(v)) for k, v in all_adjustments.items()
     ]
-    
 
-def parse_shipments(soup, locale=Locale_en_US()) -> List[Shipment]:
+
+def is_items_ordered_header(node, locale=Locale_en_US) -> bool:
+    """
+    Identify Header of Items Ordered table (within shipment table)
+    """
+    if node.name != 'tr':
+        return False
+    tds = node('td')
+    if len(tds) < 2:
+        return False
+    m1 = re.match(locale.items_ordered, tds[0].text.strip())
+    m2 = re.match(locale.price, tds[1].text.strip())
+    return(m1 is not None and m2 is not None)
+
+
+def parse_shipments(soup, locale=Locale_en_US) -> List[Shipment]:
     """
     Parses Shipment Table Part of HTML document (1st Table)
     """
@@ -423,12 +442,13 @@ def parse_shipments(soup, locale=Locale_en_US()) -> List[Shipment]:
             return False
         text = node.text.strip()
         m = re.match(locale.shipment_shipped_pattern, text)
+        # return True for both shipped and nonshipped table headers
         return m is not None or text in locale.shipment_nonshipped_headers
 
     header_tables = soup.find_all(is_shipment_header_table)
 
     if header_tables is []:
-        # no shipment table
+        # no shipment tables
         # e.g. if only gift cards in order
         logger.debug('no shipment table found')
         return []
@@ -446,23 +466,12 @@ def parse_shipments(soup, locale=Locale_en_US()) -> List[Shipment]:
             assert m is not None
             shipped_date = locale.parse_date(m.group(1))
 
+        logger.debug('parsing shipment items...')
         items = []  # type: List[Item]
 
         shipment_table = header_table.find_parent('table')
-
-        logger.debug('parsing shipment items...')
-        def is_items_ordered_header(node):
-            if node.name != 'tr':
-                return False
-            tds = node('td')
-            if len(tds) < 2:
-                return False
-            m1 = re.match(locale.items_ordered, tds[0].text.strip())
-            m2 = re.match(locale.price, tds[1].text.strip())
-            return(m1 is not None and m2 is not None)
-
-        items_ordered_header = shipment_table.find(is_items_ordered_header)
-
+        items_ordered_header = shipment_table.find(
+            lambda node: is_items_ordered_header(node, locale))
         item_rows = items_ordered_header.find_next_siblings('tr')
 
         for item_row in item_rows:
@@ -508,6 +517,7 @@ def parse_shipments(soup, locale=Locale_en_US()) -> List[Shipment]:
             if m is None:
                 m = re.match(locale.shipment_sold_by, text, re.UNICODE | re.DOTALL)
             if m is None:
+                errors.append("Could not extract item from row {}".format(text))
                 raise Exception("Could not extract item from row", text)
             
             description = re.sub(r'\s+', ' ', m.group('description').strip())
@@ -538,7 +548,7 @@ def parse_shipments(soup, locale=Locale_en_US()) -> List[Shipment]:
 
     return shipments
 
-def parse_gift_cards(soup, locale=Locale_en_US()) -> List[Shipment]:
+def parse_gift_cards(soup, locale=Locale_en_US) -> List[Shipment]:
     """
     Parses Gift Card Table Part of HTML document (1st Table)
     """
@@ -566,24 +576,12 @@ def parse_gift_cards(soup, locale=Locale_en_US()) -> List[Shipment]:
     errors = []  # type: Errors
 
     for header_table in header_tables:
-
+        logger.debug('parsing gift card items...')
         items = []  # type: List[Item]
 
         shipment_table = header_table.find_parent('table')
-
-        logger.debug('parsing gift card items...')
-        def is_items_ordered_header(node):
-            if node.name != 'tr':
-                return False
-            tds = node('td')
-            if len(tds) < 2:
-                return False
-            m1 = re.match(locale.items_ordered, tds[0].text.strip())
-            m2 = re.match(locale.price, tds[1].text.strip())
-            return(m1 is not None and m2 is not None)
-
-        items_ordered_header = shipment_table.find(is_items_ordered_header)
-
+        items_ordered_header = shipment_table.find(
+            lambda node: is_items_ordered_header(node, locale))
         item_rows = [items_ordered_header]
 
         for item_row in item_rows:
@@ -633,10 +631,11 @@ def parse_shipment_payments(
         shipment_table,
         items, errors,
         shipped_date=None,
-        locale=Locale_en_US()) -> Shipment:
+        locale=Locale_en_US) -> Shipment:
     """ Parse payment information of single shipments and gift card orders.
     """
     logger.debug('parsing shipment amounts...')
+    # consistency check: shipment subtotal against sum of item prices
     items_subtotal = locale.parse_amount(
         get_field_in_table(shipment_table, locale.items_subtotal))
 
@@ -648,17 +647,19 @@ def parse_shipment_payments(
             'expected items subtotal is %r, but parsed value is %r' %
             (expected_items_subtotal, items_subtotal))
 
+    # parse pre- and posttax adjustments for shipment
     output_fields = dict()
     output_fields['pretax_adjustments'] = get_adjustments_in_table(
         shipment_table, locale.pretax_adjustment_fields_pattern, locale=locale)
     output_fields['posttax_adjustments'] = get_adjustments_in_table(
         shipment_table, locale.posttax_adjustment_fields_pattern, locale=locale)
+    # compare total before tax
     pretax_parts = [items_subtotal or expected_items_subtotal] + [
         a.amount for a in output_fields['pretax_adjustments']
     ]
+    expected_total_before_tax = reduce_amounts(pretax_parts)
     total_before_tax = locale.parse_amount(
         get_field_in_table(shipment_table, locale.total_before_tax))
-    expected_total_before_tax = reduce_amounts(pretax_parts)
     if total_before_tax is None:
         total_before_tax = expected_total_before_tax
     elif expected_total_before_tax != total_before_tax:
@@ -668,12 +669,18 @@ def parse_shipment_payments(
 
     sales_tax = get_adjustments_in_table(shipment_table, locale.shipment_sales_tax, locale=locale)
 
+    if locale.tax_included_in_price:
+        # tax is already inlcuded in item prices
+        # do not add additional Adjustment for taxes
+        sales_tax = []
+    
+    # compare total
     posttax_parts = (
         [total_before_tax] + [a.amount for a in sales_tax] +
         [a.amount for a in output_fields['posttax_adjustments']])
+    expected_total = reduce_amounts(posttax_parts)
     total = locale.parse_amount(
         get_field_in_table(shipment_table, locale.shipment_total))
-    expected_total = reduce_amounts(posttax_parts)
     if total is None:
         total = expected_total
     elif expected_total != total:
@@ -695,7 +702,7 @@ def parse_shipment_payments(
 def parse_credit_card_transactions_from_payments_table(
         payment_table,
         order_date: datetime.date,
-        locale=Locale_en_US()) -> List[CreditCardTransaction]:
+        locale=Locale_en_US) -> Sequence[CreditCardTransaction]:
     """ Parse payment information from payments table.
     Only type and last digits are given, no amount (assuming grand total).
     Other payment methods than credit card are possible:
@@ -709,23 +716,24 @@ def parse_credit_card_transactions_from_payments_table(
     for regex in locale.payment_type:
         m = re.search(regex, payment_text)
         if m is not None:
+            # only take first matching regex, discard others!
             break
 
-    if m is not None:
-        credit_card_transactions = [
-            CreditCardTransaction(
-                date=order_date,
-                amount=grand_total,
-                card_description=m.group(1).strip(),
-                card_ending_in=m.group(2).strip(),
-            )
-        ]
-    else:
-        credit_card_transactions = []
+    if m is None:
+        return []
+
+    credit_card_transactions = [
+        CreditCardTransaction(
+            date=order_date,
+            amount=grand_total,
+            card_description=m.group(1).strip(),
+            card_ending_in=m.group(2).strip(),
+        )
+    ]
     return credit_card_transactions
 
 
-def parse_credit_card_transactions(soup, locale=Locale_en_US()) -> List[CreditCardTransaction]:
+def parse_credit_card_transactions(soup, locale=Locale_en_US) -> Sequence[CreditCardTransaction]:
     """ Parse Credit Card Transactions from bottom sub-table of payments table.
     Transactions are listed with type, 4 digits, transaction date and amount.
     """
@@ -738,7 +746,7 @@ def parse_credit_card_transactions(soup, locale=Locale_en_US()) -> List[CreditCa
         return []
     sibling = header_node.find_next_sibling('td')
     rows = sibling.find_all('tr')
-    transactions = []
+    transactions = []  # type: List[CreditCardTransaction]
     for row in rows:
         if not row.text.strip():
             continue
@@ -758,7 +766,7 @@ def parse_credit_card_transactions(soup, locale=Locale_en_US()) -> List[CreditCa
     return transactions
 
 
-def parse_invoice(path: str, locale=Locale_en_US()) -> Optional[Order]:
+def parse_invoice(path: str, locale=Locale_en_US) -> Optional[Order]:
     """ 1st method to call, distinguish between regular and digital invoice.
     """
     if os.path.basename(path).startswith('D'):
@@ -768,13 +776,56 @@ def parse_invoice(path: str, locale=Locale_en_US()) -> Optional[Order]:
     return parse_regular_order_invoice(path, locale=locale)
 
 
-def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
+def parse_regular_order_invoice(path: str, locale=Locale_en_US) -> Order:
+    """ Parse regular order type invoice (HTML document)
+    1. parse all shipment tables with individual items
+    2. parse payment table
+    3. sanity check totals extracted from item prices and payment table
+    """
     errors = []  # type: Errors
     with open(path, 'rb') as f:
         soup = bs4.BeautifulSoup(f.read(), 'lxml')
+    
+    # -----------------
+    # Order ID & Order placed date
+    # -----------------
+    logger.debug('parsing order id and order placed date...')
+    title = soup.find('title').text.strip()
+    m = re.fullmatch(locale.regular_order_id, title.strip())
+    assert m is not None
+    order_id=m.group(1)
+
+    def is_order_placed_node(node):
+        m = re.fullmatch(locale.regular_order_placed, node.text.strip())
+        return m is not None
+
+    node = soup.find(is_order_placed_node)
+    m = re.fullmatch(locale.regular_order_placed, node.text.strip())
+    assert m is not None
+    order_date = locale.parse_date(m.group(1))
+
+    # ----------------------
+    # Shipments & Gift Cards
+    # ----------------------
     logger.debug('parsing shipments...')
-    shipments = parse_shipments(soup, locale=locale) + parse_gift_cards(soup, locale=locale)
+    shipments = parse_shipments(soup, locale=locale)
+    if hasattr(locale, 'gift_card'):
+        shipments += parse_gift_cards(soup, locale=locale)
+    if len(shipments) == 0:
+        # no shipment or gift card tables found
+        msg = ('Identified regular order invoice but no items were found '
+               + '(neither shipments nor gift cards). This may be a new type. '
+               + 'Consider opening an issue at jbms/beancount-import on github.')
+        logger.warning(msg)
+        errors.append(msg)
+        # do not throw exception, continue parsing the payment table
     logger.debug('finished parsing shipments')
+
+    # -------------------------------------------
+    # Payment Table: Pre- and Posttax Adjustments
+    # -------------------------------------------
+    # Aim: Parse all pre- and posttax adjustments
+    #      consistency check grand total against sum of item costs
     logger.debug('parsing payment table...')
     payment_table_header = soup.find(
         lambda node: node.name == 'table' and re.match(
@@ -783,19 +834,21 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
     payment_table = payment_table_header.find_parent('table')
 
     logger.debug('parsing pretax adjustments...')
-    output_fields = dict()
+    output_fields = dict()  # type: Dict[str, List[Adjustment]]
     output_fields['pretax_adjustments'] = get_adjustments_in_table(
         payment_table, locale.pretax_adjustment_fields_pattern, locale=locale)
-    payment_adjustments = collections.OrderedDict()  # type: Dict[str, Amount]
-
+    
     # older invoices put pre-tax amounts on a per-shipment basis
     # new invoices only put pre-tax amounts on the overall payments section
     # detect which this is
+    
+    # payment table pretax adjustments
     pretax_amount = reduce_amounts(
         a.amount for a in output_fields['pretax_adjustments'])
+    
     shipments_pretax_amount = None
-
     if any(s.pretax_adjustments for s in shipments):
+        # sum over all shipment pretax amounts
         shipments_pretax_amount = reduce_amounts(a.amount
             for shipment in shipments
             for a in shipment.pretax_adjustments)            
@@ -806,26 +859,38 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
                 % (shipments_pretax_amount, pretax_amount))
 
     logger.debug('parsing posttax adjustments...')
-    payments_total_adjustments = []
-    shipments_total_adjustments = []
-
     # parse first to get an idea of the working currency
     grand_total = locale.parse_amount(
         get_field_in_table(payment_table, locale.regular_total_order))
 
-    def resolve_posttax_adjustments():
+    payment_adjustments = collections.OrderedDict()  # type: Dict[str, Amount]
+    payments_total_adjustments = []  # type: List[Amount]
+    shipments_total_adjustments = []  # type: List[Amount]
+
+    def resolve_posttax_adjustments() -> List[Adjustment]:
+        """ Extract and compare posttax adjustments
+        from shipment and payment tables.
+        Returns list of reduced Adjustments.
+        """
+        # get reduced form of adjustments from payment table
         payment_adjustments.update(
             reduce_adjustments(
                 get_adjustments_in_table(payment_table,
                                         locale.posttax_adjustment_fields_pattern,
                                         assumed_currency=grand_total.currency,
                                         locale=locale)))
+        # adjustments from all shipments, reduced
         all_shipments_adjustments = collections.OrderedDict(
             reduce_adjustments(
                 sum((x.posttax_adjustments for x in shipments), [])))
+        
+        # initialize dict with all adjustment keys, values not used
+        # dict ensures that keys are unique
         all_keys = collections.OrderedDict(payment_adjustments.items())
         all_keys.update(all_shipments_adjustments.items())
-
+        
+        # combine shipment and payment adjustments
+        # make sure that shipment adjustments match payment adjustments
         all_adjustments = collections.OrderedDict()  # type: Dict[str, Amount]
         for key in all_keys:
             payment_amount = payment_adjustments.get(key)
@@ -839,6 +904,7 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
                 # Amazon sometimes doesn't include these adjustments in the Shipment table
                 shipments_total_adjustments.append(amount)
             elif payment_amount != shipments_amount:
+                # Both tables include adjustment with same label, but amount does not match
                 errors.append(
                     'expected total %r to be %s, but parsed total is %s' %
                     (key, shipments_amount, payment_amount))
@@ -848,15 +914,17 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
     output_fields['posttax_adjustments'] = resolve_posttax_adjustments()
 
     logger.debug('consistency check taxes...')
+    # tax from payment table
     tax = locale.parse_amount(
         get_field_in_table(payment_table, locale.regular_estimated_tax))
 
+    # tax from shipment tables
     expected_tax = reduce_amounts(
         a.amount for shipment in shipments for a in shipment.tax)
     if expected_tax is None:
         # tax not given on shipment level
         if not locale.tax_included_in_price:
-            # add tax if not already included in item prices
+            # add tax to adjustments if not already included in item prices
             shipments_total_adjustments.append(tax)
     elif expected_tax != tax:
         errors.append(
@@ -865,7 +933,7 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
     if locale.tax_included_in_price:
         # tax is already inlcuded in item prices
         # do not add additional transaction for taxes
-        tax = []
+        tax = None
 
     logger.debug('consistency check grand total...')
     payments_total_adjustment = reduce_amounts(payments_total_adjustments)
@@ -884,19 +952,13 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
         errors.append('expected grand total is %s, but parsed value is %s' %
                     (expected_total, adjusted_grand_total))
 
-    logger.debug('parsing order placed date...')
-    def is_order_placed_node(node):
-        m = re.fullmatch(locale.regular_order_placed, node.text.strip())
-        return m is not None
-
-    node = soup.find(is_order_placed_node)
-    m = re.fullmatch(locale.regular_order_placed, node.text.strip())
-    assert m is not None
-    order_date = locale.parse_date(m.group(1))
-
+    # ---------------------------------------
+    # Payment Table: Credit Card Transactions
+    # ---------------------------------------
     logger.debug('parsing credit card transactions...')
     credit_card_transactions = parse_credit_card_transactions(soup, locale=locale)
     if not credit_card_transactions:
+        # no explicit credit card transaction table
         logger.debug('no credit card transactions table given, falling back to payments table')
         credit_card_transactions = parse_credit_card_transactions_from_payments_table(
             payment_table, order_date, locale=locale)
@@ -911,15 +973,10 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
         errors.append('total payment amount is %s, but grand total is %s' %
                       (total_payments, adjusted_grand_total))
 
-    logger.debug('parsing order ID...')
-    title = soup.find('title').text.strip()
-    m = re.fullmatch(locale.regular_order_id, title.strip())
-    assert m is not None
-
     logger.debug('...finished parsing regular invoice.')
     return Order(
         order_date=order_date,
-        order_id=m.group(1),
+        order_id=order_id,
         shipments=shipments,
         credit_card_transactions=credit_card_transactions,
         tax=tax,
@@ -929,6 +986,8 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US()) -> Order:
 
 
 def get_text_lines(parent_node):
+    """ Format nodes into list of strings
+    """
     text_lines = ['']
     for node in parent_node.children:
         if isinstance(node, bs4.NavigableString):
@@ -940,8 +999,13 @@ def get_text_lines(parent_node):
     return text_lines
 
 
-def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Order]:
-    errors = []
+def parse_digital_order_invoice(path: str, locale=Locale_en_US) -> Optional[Order]:
+    """ Parse digital order type invoice (HTML document)
+    1. parse all digital items tables
+    2. parse amounts
+    3. parse payment table
+    """
+    errors = []  # type: Errors
     with open(path, 'rb') as f:
         soup = bs4.BeautifulSoup(f.read(), 'lxml')
 
@@ -952,6 +1016,9 @@ def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Or
     if soup.find(is_cancelled_order):
         return None
 
+    # --------------------------------------------------
+    # Find Digital Order Header, parse date and order ID
+    # --------------------------------------------------
     logger.debug('parsing header...')
     def is_digital_order_row(node):
         if node.name != 'tr':
@@ -965,34 +1032,41 @@ def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Or
         except:
             return False
 
-    # Find Digital Order row
     digital_order_header = soup.find(is_digital_order_row)
     digital_order_table = digital_order_header.find_parent('table')
     m = re.match(locale.digital_order, digital_order_header.text.strip())
-    assert m is not None
+    if m is None:
+        msg = ('Identified digital order invoice but no digital orders were found.')
+        logger.warning(msg)
+        errors.append(msg)
+        # throw exception since there is no other possibility to get order_date
+        assert m is not None
     order_date = locale.parse_date(m.group(1))
 
+    order_id_td = soup.find(
+        lambda node: node.name == 'td' and
+        re.match(locale.digital_order_id, node.text.strip())
+        )
+    m = re.match(locale.digital_order_id, order_id_td.text.strip())
+    assert m is not None
+    order_id = m.group(1)
+
+    # -----------
+    # Parse Items
+    # -----------
     logger.debug('parsing items...')
-    def is_items_ordered_header(node):
-        if node.name != 'tr':
-            return False
-        tds = node('td')
-        if len(tds) < 2:
-            return False
-        m1 = re.match(locale.items_ordered, tds[0].text.strip())
-        m2 = re.match(locale.price, tds[1].text.strip())
-        return(m1 is not None and m2 is not None)
-
-    items_ordered_header = digital_order_table.find(is_items_ordered_header)
-
+    items_ordered_header = digital_order_table.find(
+        lambda node: is_items_ordered_header(node, locale))
     item_rows = items_ordered_header.find_next_siblings('tr')
-    items = []  # List[Item]
-
+    
+    items = []  # Sequence[DigitalItem]
     other_fields_td = None
 
     for item_row in item_rows:
         tds = item_row('td')
         if len(tds) != 2:
+            # payment information on order level (not payment table)
+            # differently formatted, take first column only
             other_fields_td = tds[0]
             continue
         description_node = tds[0]
@@ -1032,8 +1106,13 @@ def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Or
 
     other_fields_text_lines = get_text_lines(other_fields_td)
 
+    # -------------------------------------------
+    # Parse Amounts, Pre- and Posttax Adjustments
+    # -------------------------------------------
     logger.debug('parsing amounts...')
     def get_other_field(pattern, allow_multiple=False, return_label=False):
+        """ Look for pattern in other_fields_text_lines
+        """
         results = []
         for line in other_fields_text_lines:
             r = r'^\s*(' + pattern + r')\s+(.*[^\s])\s*$'
@@ -1094,6 +1173,8 @@ def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Or
                       (expected_total, total_for_this_order))
 
     if locale.tax_included_in_price:
+        # tax is already inlcuded in item prices
+        # do not add additional transaction for taxes
         tax = []
 
     shipment = Shipment(
@@ -1106,14 +1187,9 @@ def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Or
         errors=errors,
         **output_fields)
 
-    order_id_td = soup.find(
-        lambda node: node.name == 'td' and
-        re.match(locale.digital_order_id, node.text.strip())
-        )
-    m = re.match(locale.digital_order_id, order_id_td.text.strip())
-    assert m is not None
-    order_id = m.group(1)
-
+    # -------------
+    # Payment Table
+    # -------------
     logger.debug('parsing payment information...')
     payment_table = soup.find(
         lambda node: node.name == 'table' and
@@ -1131,7 +1207,10 @@ def parse_digital_order_invoice(path: str, locale=Locale_en_US()) -> Optional[Or
         credit_card_transactions=credit_card_transactions,
         pretax_adjustments=[],
         posttax_adjustments=output_fields['posttax_adjustments'],
-        tax=[],
+        # tax given on "shipment level"
+        # for digital orders tax is always given on shipment level
+        # therefore tax on order level is irrelevant
+        tax=None,
         errors=[])
 
 
