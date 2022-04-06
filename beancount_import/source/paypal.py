@@ -141,6 +141,7 @@ from ..journal_editor import JournalEditor
 from ..matching import FIXME_ACCOUNT, SimpleInventory
 from ..amount_parsing import parse_amount
 
+
 transaction_schema = {
     '#schema': 'http://json-schema.org/draft-07/schema#',
     'description': 'JSON schema for the transaction details.',
