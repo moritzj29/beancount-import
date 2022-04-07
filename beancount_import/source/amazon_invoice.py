@@ -945,11 +945,18 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US) -> Order:
     # if no shipments pre-tax section, then the expected total isn't accounting
     # for the pre-tax adjustments yet since they are only in the grand total section
     if shipments_pretax_amount is None:
+        if locale.tax_included_in_price and pretax_amount is not None:
+            # When tax is included in item prices it makes no sense to add pretax_amounts
+            # -> expected_total is including tax, pretax_amount is not
+            # it is not possible to add tax, since it may vary depending on the item (e.g. 7% and 19% for de_DE)
+            # Unfortunately, there is not enough information in the invoice to handle this
+            # Raise explanatory error message if pretax adjustments are found
+            errors.append('Pretax adjustments found but prices already include tax, grand totals will differ!')
         expected_total = add_amount(expected_total, pretax_amount)
 
     adjusted_grand_total = add_amount(payments_total_adjustment, grand_total)
     if expected_total != adjusted_grand_total:
-        errors.append('expected grand total is %s, but parsed value is %s' %
+        errors.append('expected grand total (sum of items) is %s, but parsed value is %s' %
                     (expected_total, adjusted_grand_total))
 
     # ---------------------------------------
