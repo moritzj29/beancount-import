@@ -950,8 +950,9 @@ def parse_regular_order_invoice(path: str, locale=Locale_en_US) -> Order:
             # -> expected_total is including tax, pretax_amount is not
             # it is not possible to add tax, since it may vary depending on the item (e.g. 7% and 19% for de_DE)
             # Unfortunately, there is not enough information in the invoice to handle this
-            # Raise explanatory error message if pretax adjustments are found
-            errors.append('Pretax adjustments found but prices already include tax, grand totals will differ!')
+            # Raise explanatory error message if pretax adjustments are found and non-zero
+            if pretax_amount.number != ZERO:
+                errors.append('Pretax adjustments found but prices already include tax, grand totals will differ!')
         expected_total = add_amount(expected_total, pretax_amount)
 
     adjusted_grand_total = add_amount(payments_total_adjustment, grand_total)
