@@ -42,7 +42,11 @@ def parse_amount(x, assumed_currency=None):
             currency = {'$': 'USD', '€': 'EUR', '£': 'GBP'}[m.group(1)]
     elif m.group(3):
         # unit after amount
-        currency = m.group(3)
+        if len(m.group(3)) == 3:
+            # 'EUR' or 'USD'
+            currency = m.group(3)
+        else:
+            currency = {'$': 'USD', '€': 'EUR', '£': 'GBP'}[m.group(3)]
     elif assumed_currency is not None:
         currency = assumed_currency
     else:
