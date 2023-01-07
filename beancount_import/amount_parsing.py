@@ -30,7 +30,7 @@ def parse_amount(x, assumed_currency=None):
     if not x:
         return None
     sign, amount_str = parse_possible_negative(x)
-    m = re.fullmatch(r'(?:[(][^)]+[)])?\s*([\$€£]|[A-Z]{3})?\s*((?:[0-9](?:,?[0-9])*|(?=\.))(?:\.[0-9]+)?)(?:\s+([A-Z]{3}))?', amount_str)
+    m = re.fullmatch(r'(?:[(][^)]+[)])?\s*([\$€£]|[A-Z]{3})?\s*((?:[0-9](?:,?[0-9])*|(?=\.))(?:\.[0-9]+)?)(?:\s+([\$€£]|[A-Z]{3}))?', amount_str)
     if m is None:
         raise ValueError('Failed to parse amount from %r' % amount_str)
     if m.group(1):
